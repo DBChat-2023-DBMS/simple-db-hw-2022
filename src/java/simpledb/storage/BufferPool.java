@@ -38,13 +38,16 @@ public class BufferPool {
      */
     public static final int DEFAULT_PAGES = 50;
 
+    private final Page[] buffer;
+    private int evictIdx = 0;
+
     /**
      * Creates a BufferPool that caches up to numPages pages.
      *
      * @param numPages maximum number of pages in this buffer pool.
      */
     public BufferPool(int numPages) {
-        // TODO: some code goes here
+        buffer = new Page[numPages];
     }
 
     public static int getPageSize() {
@@ -78,8 +81,20 @@ public class BufferPool {
      */
     public Page getPage(TransactionId tid, PageId pid, Permissions perm)
             throws TransactionAbortedException, DbException {
-        // TODO: some code goes here
-        return null;
+        int idx = -1;
+
+        for (int i = 0; i < buffer.length; ++i) {
+            if (null == buffer[i]) {
+                idx = i;
+            } else if (pid.equals(buffer[i].getId())) {
+                // TODO: lock?
+                return buffer[i];
+            }
+        }
+
+        DbFile file = Database.getCatalog().getDatabaseFile(pid.getTableId());
+        Page page = file.readPage(pid);
+        return buffer[idx] = page;
     }
 
     /**

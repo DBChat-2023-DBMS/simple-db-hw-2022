@@ -39,13 +39,35 @@ public class TupleDesc implements Serializable {
         }
     }
 
+    private final Type[] types;
+    private final String[] names;
+
     /**
      * @return An iterator which iterates over all the field TDItems
      *         that are included in this TupleDesc
      */
     public Iterator<TDItem> iterator() {
-        // TODO: some code goes here
-        return null;
+        return new Iterator<TDItem>() {
+            private int idx = -1;
+            @Override
+            public boolean hasNext() {
+                return idx + 1 < types.length;
+            }
+
+            @Override
+            public TDItem next() {
+                if(++idx == types.length) {
+                    throw new NoSuchElementException();
+                } else {
+                    return new TDItem(types[idx], names[idx]);
+                }
+            }
+
+            @Override
+            public void remove() {
+                throw new UnsupportedOperationException("unimplemented");
+            }
+        };
     }
 
     private static final long serialVersionUID = 1L;
@@ -60,7 +82,14 @@ public class TupleDesc implements Serializable {
      *                be null.
      */
     public TupleDesc(Type[] typeAr, String[] fieldAr) {
-        // TODO: some code goes here
+        types = new Type[typeAr.length];
+        for(int i = 0; i < typeAr.length; ++i) {
+            types[i] = typeAr[i];
+        }
+        names = new String[typeAr.length];
+        for(int i = 0; i < fieldAr.length; ++i) {
+            names[i] = fieldAr[i];
+        }
     }
 
     /**
@@ -71,15 +100,14 @@ public class TupleDesc implements Serializable {
      *               TupleDesc. It must contain at least one entry.
      */
     public TupleDesc(Type[] typeAr) {
-        // TODO: some code goes here
+        this(typeAr, new String[0]);
     }
 
     /**
      * @return the number of fields in this TupleDesc
      */
     public int numFields() {
-        // TODO: some code goes here
-        return 0;
+        return types.length;
     }
 
     /**
@@ -90,8 +118,11 @@ public class TupleDesc implements Serializable {
      * @throws NoSuchElementException if i is not a valid field reference.
      */
     public String getFieldName(int i) throws NoSuchElementException {
-        // TODO: some code goes here
-        return null;
+        if(i < 0 || i >= types.length) {
+            throw new NoSuchElementException("Index Out of Range.");
+        } else {
+            return names[i];
+        }
     }
 
     /**
@@ -103,8 +134,11 @@ public class TupleDesc implements Serializable {
      * @throws NoSuchElementException if i is not a valid field reference.
      */
     public Type getFieldType(int i) throws NoSuchElementException {
-        // TODO: some code goes here
-        return null;
+        if (i < 0 || i >= types.length) {
+            throw new NoSuchElementException("Index Out of Range.");
+        } else {
+            return types[i];
+        }
     }
 
     /**
@@ -115,8 +149,14 @@ public class TupleDesc implements Serializable {
      * @throws NoSuchElementException if no field with a matching name is found.
      */
     public int indexForFieldName(String name) throws NoSuchElementException {
-        // TODO: some code goes here
-        return 0;
+        if (null != name) {
+            for (int i = 0; i < names.length; ++i) {
+                if (name.equals((names[i]))) {
+                    return i;
+                }
+            }
+        }
+        throw new NoSuchElementException("Unknown Field Name.");
     }
 
     /**
@@ -124,8 +164,11 @@ public class TupleDesc implements Serializable {
      *         Note that tuples from a given TupleDesc are of a fixed size.
      */
     public int getSize() {
-        // TODO: some code goes here
-        return 0;
+        int size = 0;
+        for (int i = 0; i < types.length; ++i) {
+            size += types[i].getLen();
+        }
+        return size;
     }
 
     /**
@@ -137,8 +180,18 @@ public class TupleDesc implements Serializable {
      * @return the new TupleDesc
      */
     public static TupleDesc merge(TupleDesc td1, TupleDesc td2) {
-        // TODO: some code goes here
-        return null;
+        Type[] types = new Type[td1.types.length + td2.types.length];
+        String[] names = new String[td1.names.length + td2.names.length];
+        int idx = 0;
+        for(int i = 0; i < td1.types.length; ++i) {
+            types[idx] = td1.types[i];
+            names[idx++] = td1.names[i];
+        }
+        for(int i = 0; i < td2.types.length; ++i) {
+            types[idx] = td2.types[i];
+            types[idx++] = td2.types[i];
+        }
+        return new TupleDesc(types, names);
     }
 
     /**
@@ -152,8 +205,29 @@ public class TupleDesc implements Serializable {
      */
 
     public boolean equals(Object o) {
-        // TODO: some code goes here
-        return false;
+        if(!(o instanceof TupleDesc)) {
+            return false;
+        } else {
+            TupleDesc other = (TupleDesc) o;
+            if (this.numFields() != other.numFields()) {
+                return false;
+            } else {
+                int n = this.numFields();
+
+                for (int i = 0; i < n; ++i) {
+                    if (null == this.getFieldName(i)) {
+                        if (null != other.getFieldName(i)) {
+                            return false;
+                        }
+                    } else if (this.getFieldName(i).equals(other.getFieldName(i))) {
+                        return false;
+                    } else if (this.getFieldType(i) != other.getFieldType(i)) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+        }
     }
 
     public int hashCode() {
@@ -170,7 +244,14 @@ public class TupleDesc implements Serializable {
      * @return String describing this descriptor.
      */
     public String toString() {
-        // TODO: some code goes here
-        return "";
+        StringBuilder sb = new StringBuilder();
+        int n = this.numFields();
+        sb.append(getFieldType(0));
+        sb.append("(" + this.getFieldName(0) + ")");
+        for (int i = 1; i < n; ++i) {
+            sb.append("," + getFieldType(i));
+            sb.append("(" + this.getFieldName(i) + ")");
+        }
+        return sb.toString();
     }
 }
