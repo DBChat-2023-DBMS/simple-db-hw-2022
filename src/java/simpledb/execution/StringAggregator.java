@@ -1,7 +1,14 @@
 package simpledb.execution;
 
+import simpledb.common.DbException;
 import simpledb.common.Type;
-import simpledb.storage.Tuple;
+import simpledb.storage.*;
+import simpledb.transaction.TransactionAbortedException;
+
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.NoSuchElementException;
 
 /**
  * Knows how to compute some aggregate over a set of StringFields.
@@ -9,7 +16,12 @@ import simpledb.storage.Tuple;
 public class StringAggregator implements Aggregator {
 
     private static final long serialVersionUID = 1L;
+    private int gbfield;
+    private Type gbfieldtype;
+    private int afield;
+    private Op what;
 
+    private Map<Field, Integer> groupMap;
     /**
      * Aggregate constructor
      *
@@ -21,7 +33,13 @@ public class StringAggregator implements Aggregator {
      */
 
     public StringAggregator(int gbfield, Type gbfieldtype, int afield, Op what) {
-        // TODO: some code goes here
+        if (!what.equals(Op.COUNT))
+            throw new IllegalArgumentException("Only COUNT is supported for String fields!");
+        this.gbfield = gbfield;
+        this.gbfieldtype = gbfieldtype;
+        this.afield = afield;
+        this.what = what;
+        this.groupMap = new HashMap<>();
     }
 
     /**
@@ -30,7 +48,16 @@ public class StringAggregator implements Aggregator {
      * @param tup the Tuple containing an aggregate field and a group-by field
      */
     public void mergeTupleIntoGroup(Tuple tup) {
-        // TODO: some code goes here
+        StringField afield = (StringField) tup.getField(this.afield);
+        Field gbfield = this.gbfield == NO_GROUPING ? null : tup.getField(this.gbfield);
+        String newValue = afield.getValue();
+        if (gbfield != null && gbfield.getType() != this.gbfieldtype) {
+            throw new IllegalArgumentException("Given tuple has wrong type");
+        }
+        if (!this.groupMap.containsKey(gbfield))
+            this.groupMap.put(gbfield, 1);
+        else
+            this.groupMap.put(gbfield, this.groupMap.get(gbfield) + 1);
     }
 
     /**
@@ -42,8 +69,7 @@ public class StringAggregator implements Aggregator {
      *         aggregate specified in the constructor.
      */
     public OpIterator iterator() {
-        // TODO: some code goes here
-        throw new UnsupportedOperationException("please implement me for lab2");
+        return new AggregateIterator(this.groupMap, this.gbfieldtype);
     }
 
 }
