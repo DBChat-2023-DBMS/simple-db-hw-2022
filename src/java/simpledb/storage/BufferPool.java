@@ -39,6 +39,7 @@ public class BufferPool {
     public static final int DEFAULT_PAGES = 50;
 
     private final Page[] buffer;
+    private int numPages;
     private int evictIdx = 0;
 
     /**
@@ -47,6 +48,7 @@ public class BufferPool {
      * @param numPages maximum number of pages in this buffer pool.
      */
     public BufferPool(int numPages) {
+        this.numPages = numPages;
         buffer = new Page[numPages];
     }
 
@@ -142,6 +144,7 @@ public class BufferPool {
         // not necessary for lab1|lab2
     }
 
+
     /**
      * Add a tuple to the specified table on behalf of transaction tid.  Will
      * acquire a write lock on the page the tuple is added to and any other
@@ -159,8 +162,11 @@ public class BufferPool {
      */
     public void insertTuple(TransactionId tid, int tableId, Tuple t)
             throws DbException, IOException, TransactionAbortedException {
-        // TODO: some code goes here
-        // not necessary for lab1
+        List<Page> list = Database.getCatalog().getDatabaseFile(tableId).insertTuple(tid, t);
+        for (Page p : list) {
+            p.markDirty(true, tid);
+        }
+
     }
 
     /**
@@ -178,8 +184,10 @@ public class BufferPool {
      */
     public void deleteTuple(TransactionId tid, Tuple t)
             throws DbException, IOException, TransactionAbortedException {
-        // TODO: some code goes here
-        // not necessary for lab1
+        List<Page> list = Database.getCatalog().getDatabaseFile(t.getRecordId().getPageId().getTableId()).deleteTuple(tid, t);
+        for (Page p : list) {
+            p.markDirty(true, tid);
+        }
     }
 
     /**
@@ -188,9 +196,11 @@ public class BufferPool {
      * break simpledb if running in NO STEAL mode.
      */
     public synchronized void flushAllPages() throws IOException {
-        // TODO: some code goes here
-        // not necessary for lab1
-
+        for (int i=0; i<buffer.length; i++) {
+            if (null != buffer[i]) {
+                flushPage(buffer[i].getId());
+            }
+        }
     }
 
     /**
@@ -203,8 +213,12 @@ public class BufferPool {
      * are removed from the cache so they can be reused safely
      */
     public synchronized void removePage(PageId pid) {
-        // TODO: some code goes here
-        // not necessary for lab1
+        for (int i=0; i<buffer.length; i++) {
+            if (null != buffer[i] && pid.equals(buffer[i].getId())) {
+                buffer[i] = null;
+                break;
+            }
+        }
     }
 
     /**
@@ -213,8 +227,19 @@ public class BufferPool {
      * @param pid an ID indicating the page to flush
      */
     private synchronized void flushPage(PageId pid) throws IOException {
-        // TODO: some code goes here
-        // not necessary for lab1
+        for (int i=0; i<buffer.length; i++) {
+            if (null != buffer[i] && buffer[i].getId().equals(pid)) {
+                TransactionId dirtier = buffer[i].isDirty();
+
+                if (null != dirtier) {
+                    Database.getLogFile().logWrite(dirtier, buffer[i].getBeforeImage(), buffer[i]);
+                    Database.getLogFile().force();
+                    Database.getCatalog().getDatabaseFile(pid.getTableId()).writePage(buffer[i]);
+                    buffer[i].markDirty(false, buffer[i].isDirty());
+                }
+                break;
+            }
+        }
     }
 
     /**
@@ -230,8 +255,22 @@ public class BufferPool {
      * Flushes the page to disk to ensure dirty pages are updated on disk.
      */
     private synchronized void evictPage() throws DbException {
-        // TODO: some code goes here
-        // not necessary for lab1
+        for (int init=evictIdx; null!=buffer[evictIdx] &&
+                null!=buffer[evictIdx].isDirty(); ) {
+            evictIdx = (evictIdx+1)%buffer.length;
+            if (init == evictIdx) {
+                throw new DbException("no non-dirty page to evict");
+            }
+        }
+        if (null != buffer[evictIdx]) {
+            try {
+                flushPage(buffer[evictIdx].getId());
+                buffer[evictIdx] = null;
+                evictIdx = (evictIdx+1)%buffer.length;
+            } catch (IOException e) {
+                throw new DbException(e.getMessage());
+            }
+        }
     }
 
 }
