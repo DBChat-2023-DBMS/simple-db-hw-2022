@@ -7,6 +7,8 @@ import simpledb.storage.Tuple;
 import simpledb.storage.TupleDesc;
 import simpledb.transaction.TransactionAbortedException;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.NoSuchElementException;
 
 /**
@@ -17,6 +19,14 @@ import java.util.NoSuchElementException;
 public class Aggregate extends Operator {
 
     private static final long serialVersionUID = 1L;
+    private OpIterator child;
+    private int afield;
+    private int gfield;
+    private Aggregator.Op aop;
+
+    private Aggregator aggregator;
+    private OpIterator it;
+    private TupleDesc td;
 
     /**
      * Constructor.
@@ -32,7 +42,34 @@ public class Aggregate extends Operator {
      * @param aop    The aggregation operator to use
      */
     public Aggregate(OpIterator child, int afield, int gfield, Aggregator.Op aop) {
-        // TODO: some code goes here
+        this.child = child;
+        this.afield = afield;
+        this.gfield = gfield;
+        this.aop = aop;
+
+        Type gfieldtype = gfield == -1 ? null : this.child.getTupleDesc().getFieldType(gfield);
+
+        if(child.getTupleDesc().getFieldType(afield) == Type.STRING_TYPE) {
+            aggregator =  new StringAggregator(gfield, gfieldtype, afield, aop);
+        } else {
+            aggregator = new IntegerAggregator(gfield, gfieldtype, afield, aop);
+        }
+        it = aggregator.iterator();
+
+        List<Type> types = new ArrayList<>();
+        List<String> names = new ArrayList<>();
+
+        if (gfieldtype != null) {
+            types.add(gfieldtype);
+            names.add(child.getTupleDesc().getFieldName(gfield));
+        }
+        types.add(child.getTupleDesc().getFieldType(afield));
+        names.add(child.getTupleDesc().getFieldName(afield));
+        if (aop.equals(Op.SUM_COUNT)) {
+            types.add(Type.INT_TYPE);
+            names.add("COUNT");
+        }
+        td = new TupleDesc(types.toArray(new Type[types.size()]), names.toArray(new String[names.size()]));
     }
 
     /**
@@ -41,8 +78,7 @@ public class Aggregate extends Operator {
      *         {@link Aggregator#NO_GROUPING}
      */
     public int groupField() {
-        // TODO: some code goes here
-        return -1;
+        return gfield;
     }
 
     /**
@@ -51,16 +87,14 @@ public class Aggregate extends Operator {
      *         null;
      */
     public String groupFieldName() {
-        // TODO: some code goes here
-        return null;
+        return td.getFieldName(0);
     }
 
     /**
      * @return the aggregate field
      */
     public int aggregateField() {
-        // TODO: some code goes here
-        return -1;
+        return afield;
     }
 
     /**
@@ -68,16 +102,18 @@ public class Aggregate extends Operator {
      *         tuples
      */
     public String aggregateFieldName() {
-        // TODO: some code goes here
-        return null;
+        if (gfield == -1) {
+            return td.getFieldName(0);
+        } else {
+            return td.getFieldName(1);
+        }
     }
 
     /**
      * @return return the aggregate operator
      */
     public Aggregator.Op aggregateOp() {
-        // TODO: some code goes here
-        return null;
+        return aop;
     }
 
     public static String nameOfAggregatorOp(Aggregator.Op aop) {
@@ -86,7 +122,12 @@ public class Aggregate extends Operator {
 
     public void open() throws NoSuchElementException, DbException,
             TransactionAbortedException {
-        // TODO: some code goes here
+        child.open();
+        while (child.hasNext()) {
+            aggregator.mergeTupleIntoGroup(child.next());
+        }
+        it.open();
+        super.open();
     }
 
     /**
@@ -97,12 +138,15 @@ public class Aggregate extends Operator {
      * aggregate. Should return null if there are no more tuples.
      */
     protected Tuple fetchNext() throws TransactionAbortedException, DbException {
-        // TODO: some code goes here
+        while (it.hasNext()) {
+            return it.next();
+        }
         return null;
     }
 
     public void rewind() throws DbException, TransactionAbortedException {
-        // TODO: some code goes here
+        child.rewind();
+        it.rewind();
     }
 
     /**
@@ -117,23 +161,37 @@ public class Aggregate extends Operator {
      * iterator.
      */
     public TupleDesc getTupleDesc() {
-        // TODO: some code goes here
-        return null;
+        return td;
     }
 
     public void close() {
-        // TODO: some code goes here
+        super.close();
+        child.close();
+        it.close();
     }
 
     @Override
     public OpIterator[] getChildren() {
-        // TODO: some code goes here
-        return null;
+        return new OpIterator[] {this.child};
     }
 
     @Override
     public void setChildren(OpIterator[] children) {
-        // TODO: some code goes here
+        this.child = children[0];
+        List<Type> types = new ArrayList<>();
+        List<String> names = new ArrayList<>();
+        Type gfieldType = gfield == -1 ? null : child.getTupleDesc().getFieldType(gfield);
+        if (gfieldType != null) {
+            types.add(gfieldType);
+            names.add(child.getTupleDesc().getFieldName(gfield));
+        }
+        types.add(child.getTupleDesc().getFieldType(afield));
+        names.add(child.getTupleDesc().getFieldName(afield));
+        if (aop.equals(Op.SUM_COUNT)) {
+            types.add(Type.INT_TYPE);
+            names.add("COUNT");
+        }
+        td = new TupleDesc(types.toArray(new Type[types.size()]), names.toArray(new String[names.size()]));
     }
 
 }

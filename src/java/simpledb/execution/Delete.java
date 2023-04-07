@@ -19,6 +19,11 @@ import java.io.IOException;
 public class Delete extends Operator {
 
     private static final long serialVersionUID = 1L;
+    private TransactionId tid;
+    private OpIterator child;
+    private final TupleDesc td;
+    private int counter;
+    private boolean called;
 
     /**
      * Constructor specifying the transaction that this delete belongs to as
@@ -28,24 +33,32 @@ public class Delete extends Operator {
      * @param child The child operator from which to read tuples for deletion
      */
     public Delete(TransactionId t, OpIterator child) {
-        // TODO: some code goes here
+        this.tid = t;
+        this.child = child;
+        this.td = new TupleDesc(new Type[]{Type.INT_TYPE}, new String[]{});
+        this.counter = -1;
+        this.called = false;
     }
 
     public TupleDesc getTupleDesc() {
-        // TODO: some code goes here
-        return null;
+        return td;
     }
 
     public void open() throws DbException, TransactionAbortedException {
-        // TODO: some code goes here
+        this.child.open();
+        super.open();
+        this.counter = 0;
     }
 
     public void close() {
-        // TODO: some code goes here
+        super.close();
+        this.child.close();
+        this.counter = -1;
     }
 
     public void rewind() throws DbException, TransactionAbortedException {
-        // TODO: some code goes here
+        this.child.rewind();
+        this.counter = 0;
     }
 
     /**
@@ -58,19 +71,31 @@ public class Delete extends Operator {
      * @see BufferPool#deleteTuple
      */
     protected Tuple fetchNext() throws TransactionAbortedException, DbException {
-        // TODO: some code goes here
-        return null;
+        if (this.called) return null;
+        this.called = true;
+        while (this.child.hasNext()) {
+            Tuple t = child.next();
+            try {
+                Database.getBufferPool().deleteTuple(tid, t);
+                this.counter++;
+            } catch (IOException e) {
+                e.printStackTrace();
+                break;
+            }
+        }
+        Tuple tu = new Tuple(this.td);
+        tu.setField(0, new IntField(this.counter));
+        return tu;
     }
 
     @Override
     public OpIterator[] getChildren() {
-        // TODO: some code goes here
-        return null;
+        return new OpIterator[] {this.child};
     }
 
     @Override
     public void setChildren(OpIterator[] children) {
-        // TODO: some code goes here
+        this.child = children[0];
     }
 
 }

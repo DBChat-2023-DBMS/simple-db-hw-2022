@@ -40,6 +40,7 @@ public class BufferPool {
 
     private final Page[] buffer;
     private int numPages;
+    public final LockManager lock;
     private int evictIdx = 0;
 
     /**
@@ -50,6 +51,7 @@ public class BufferPool {
     public BufferPool(int numPages) {
         this.numPages = numPages;
         buffer = new Page[numPages];
+        lock = new LockManager(numPages);
     }
 
     public static int getPageSize() {
@@ -89,14 +91,26 @@ public class BufferPool {
             if (null == buffer[i]) {
                 idx = i;
             } else if (pid.equals(buffer[i].getId())) {
-                // TODO: lock?
+                try {
+                    lock.acquire(tid, i, perm);
+                } catch (InterruptedException e) {
+                    throw new TransactionAbortedException();
+                }
                 return buffer[i];
             }
         }
 
-        DbFile file = Database.getCatalog().getDatabaseFile(pid.getTableId());
-        Page page = file.readPage(pid);
-        return buffer[idx] = page;
+        if (idx < 0) {
+            evictPage();
+            return getPage(tid, pid, perm);
+        } else {
+            try {
+                lock.acquire(tid, idx, perm);
+            } catch (InterruptedException e) {
+                throw new TransactionAbortedException();
+            }
+            return buffer[idx] = Database.getCatalog().getDatabaseFile(pid.getTableId()).readPage(pid);
+        }
     }
 
     /**
@@ -109,8 +123,15 @@ public class BufferPool {
      * @param pid the ID of the page to unlock
      */
     public void unsafeReleasePage(TransactionId tid, PageId pid) {
-        // TODO: some code goes here
-        // not necessary for lab1|lab2
+        for (int i = 0; i < buffer.length; ++i) {
+            if (null != buffer[i] && buffer[i].getId().equals(pid)) {
+                if (lock.isHolding(tid, i)) {
+                    lock.release(tid, i);
+                    return;
+                }
+            }
+        }
+        throw new IllegalArgumentException("page not in buffer");
     }
 
     /**
@@ -118,17 +139,19 @@ public class BufferPool {
      *
      * @param tid the ID of the transaction requesting the unlock
      */
-    public void transactionComplete(TransactionId tid) {
-        // TODO: some code goes here
-        // not necessary for lab1|lab2
+    public void transactionComplete(TransactionId tid) throws IOException {
+        transactionComplete(tid, true);
     }
 
     /**
      * Return true if the specified transaction has a lock on the specified page
      */
     public boolean holdsLock(TransactionId tid, PageId p) {
-        // TODO: some code goes here
-        // not necessary for lab1|lab2
+        for (int i = 0; i < buffer.length; i++) {
+            if (null != buffer[i] && buffer[i].getId().equals(p)) {
+                return lock.isHolding(tid, i);
+            }
+        }
         return false;
     }
 
@@ -139,9 +162,18 @@ public class BufferPool {
      * @param tid    the ID of the transaction requesting the unlock
      * @param commit a flag indicating whether we should commit or abort
      */
-    public void transactionComplete(TransactionId tid, boolean commit) {
-        // TODO: some code goes here
-        // not necessary for lab1|lab2
+    public void transactionComplete(TransactionId tid, boolean commit) throws IOException {
+        if (commit) {
+            flushPages(tid);
+        }
+        for (int i = 0; i < buffer.length; i++) {
+            if (lock.isHolding(tid, i)) {
+                if (!commit && null != buffer[i] && tid.equals(buffer[i].isDirty())) {
+                    buffer[i] = null;
+                }
+                lock.release(tid, i);
+            }
+        }
     }
 
 
@@ -246,8 +278,12 @@ public class BufferPool {
      * Write all pages of the specified transaction to disk.
      */
     public synchronized void flushPages(TransactionId tid) throws IOException {
-        // TODO: some code goes here
-        // not necessary for lab1|lab2
+        for (int i = 0; i < buffer.length; i++) {
+            if (null != buffer[i] && lock.isHolding(tid, i)) {
+                flushPage(buffer[i].getId());
+                buffer[i].setBeforeImage();
+            }
+        }
     }
 
     /**
