@@ -100,7 +100,7 @@ public class SystemTestUtil {
     }
 
     public static void matchTuples(DbFile f, List<List<Integer>> tuples)
-            throws DbException, TransactionAbortedException {
+            throws DbException, TransactionAbortedException, IOException {
         TransactionId tid = new TransactionId();
         matchTuples(f, tid, tuples);
         Database.getBufferPool().transactionComplete(tid);

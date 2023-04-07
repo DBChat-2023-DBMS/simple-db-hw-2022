@@ -8,6 +8,7 @@ import simpledb.storage.*;
 import simpledb.systemtest.SimpleDbTestBase;
 import simpledb.execution.Predicate.Op;
 
+import java.io.IOException;
 import java.util.*;
 
 import org.junit.After;
@@ -34,7 +35,7 @@ public class BTreeFileReadTest extends SimpleDbTestBase {
 	}
 
 	@After
-	public void tearDown() {
+	public void tearDown() throws IOException {
 		Database.getBufferPool().transactionComplete(tid);
 	}
 

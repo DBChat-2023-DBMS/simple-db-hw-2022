@@ -12,6 +12,7 @@ import simpledb.storage.*;
 import simpledb.systemtest.SystemTestUtil;
 import simpledb.transaction.TransactionId;
 
+import java.io.IOException;
 import java.util.Arrays;
 
 public class HeapFileWriteTest extends TestUtil.CreateHeapFile {
@@ -25,7 +26,7 @@ public class HeapFileWriteTest extends TestUtil.CreateHeapFile {
         tid = new TransactionId();
     }
 
-    @After public void tearDown() {
+    @After public void tearDown() throws IOException {
         Database.getBufferPool().transactionComplete(tid);
     }
 

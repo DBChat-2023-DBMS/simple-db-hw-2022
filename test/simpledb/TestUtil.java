@@ -345,7 +345,11 @@ public class TestUtil {
                     error = e;
                 }
 
-                Database.getBufferPool().transactionComplete(tid, false);
+                try {
+                    Database.getBufferPool().transactionComplete(tid, false);
+                } catch (IOException ex) {
+                    throw new RuntimeException(ex);
+                }
             }
         }
 
